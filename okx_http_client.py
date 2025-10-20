@@ -75,9 +75,9 @@ class OKXHTTPClient:
         
         try:
             if method == 'GET':
-                response = requests.get(url, headers=headers, params=params, timeout=10)
+                response = requests.get(url, headers=headers, params=params, timeout=30)
             elif method == 'POST':
-                response = requests.post(url, headers=headers, json=data, timeout=10)
+                response = requests.post(url, headers=headers, json=data, timeout=30)
             else:
                 raise ValueError(f'不支持的HTTP方法: {method}')
             

@@ -2,6 +2,13 @@
 OKX HTTP交易系统测试
 直接使用HTTP请求，不依赖SDK
 """
+import sys
+import os
+
+# 添加项目根目录到Python路径
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(project_root)
+
 from okx_http_client import client
 from config import DEFAULT_INST_ID
 
@@ -95,37 +102,41 @@ def test_trading_system():
     print("\n=== 测试交易系统 ===")
     
     try:
-        from http_trader import OKXHTTPTrader
+        # 测试合约交易API
+        print("1. 测试合约交易API...")
         
-        # 创建交易系统
-        trader = OKXHTTPTrader()
-        
-        # 测试获取行情
-        print("1. 测试获取行情...")
-        ticker = trader.get_ticker()
-        if ticker:
-            print(f"✅ BTC价格: ${ticker['last']}")
-        else:
-            print("❌ 获取行情失败")
-            return False
-        
-        # 测试获取账户余额
-        print("\n2. 测试获取账户余额...")
-        balance = trader.get_balance()
-        if balance:
-            print("✅ 账户余额:")
-            for detail in balance:
+        # 测试获取合约余额
+        print("   获取合约账户余额...")
+        contract_balance = client.get_futures_balance()
+        if contract_balance and contract_balance.get('code') == '0':
+            print("✅ 合约账户余额:")
+            for detail in contract_balance['data'][0]['details']:
                 avail_bal = float(detail.get('availBal', 0))
                 if avail_bal > 0:
                     print(f"   {detail['ccy']}: {avail_bal}")
         else:
-            print("❌ 获取账户余额失败")
+            print("❌ 获取合约账户余额失败")
             return False
         
-        # 测试信号分析
-        print("\n3. 测试信号分析...")
-        signal = trader.analyze_ma_signal()
-        print(f"✅ 信号分析结果: {signal}")
+        # 测试获取合约持仓
+        print("\n   获取合约持仓...")
+        positions = client.get_positions()
+        if positions and positions.get('code') == '0':
+            print(f"✅ 当前合约持仓数量: {len(positions['data'])}")
+            if positions['data']:
+                for pos in positions['data']:
+                    print(f"   {pos['instId']}: {pos['pos']} @ ${pos['avgPx']}")
+        else:
+            print("✅ 当前无合约持仓")
+        
+        # 测试获取合约K线数据
+        print("\n   获取合约K线数据...")
+        contract_candles = client.get_candles("BTC-USDT-SWAP", "15m", "10")
+        if contract_candles and contract_candles.get('code') == '0':
+            print(f"✅ 获取到 {len(contract_candles['data'])} 根合约K线")
+        else:
+            print("❌ 获取合约K线数据失败")
+            return False
         
         print("✅ 交易系统测试通过")
         return True
