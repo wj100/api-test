@@ -34,15 +34,26 @@ cp env.example .env
 # 编辑 .env 文件，填入您的API密钥
 ```
 
-### 3. 启动合约策略
+### 3. 使用策略管理器
 ```bash
-python3 start_contract_strategy.py
+# 启动统一策略管理器
+python3 strategy_manager.py
+
+# 或者直接运行特定策略
+python3 -c "
+from strategy_manager import StrategyManager
+manager = StrategyManager()
+manager.register_strategy('enhanced_sar', EnhancedSARStrategyContract)
+manager.run_strategy('enhanced_sar', 'live')
+"
 ```
 
-### 4. 输入参数
-- 投入的USDT金额
-- 杠杆倍数 (默认2倍)
-- 策略参数 (可选，有默认值)
+### 4. 策略管理器功能
+- **策略注册**: 自动注册所有可用策略
+- **实盘运行**: 支持实盘交易
+- **回测功能**: 支持历史数据回测
+- **报告生成**: 自动生成详细报告
+- **状态监控**: 实时监控策略状态
 
 ## 📁 项目结构
 

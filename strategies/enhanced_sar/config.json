@@ -1,0 +1,33 @@
+{
+  "strategy_name": "增强版SAR策略",
+  "description": "基于抛物线SAR指标的合约交易策略，支持做多做空、止盈止损",
+  "investment": {
+    "initial_usdt": 1000,
+    "leverage": 2,
+    "currency": "USDT"
+  },
+  "trading": {
+    "inst_id": "BTC-USDT-SWAP",
+    "kline_period": "15m",
+    "pos_side": "net"
+  },
+  "sar_params": {
+    "af_start": 0.02,
+    "af_increment": 0.02,
+    "af_maximum": 0.2
+  },
+  "risk_management": {
+    "take_profit_ratio": 0.02,
+    "stop_loss_ratio": 0.01,
+    "atr_period": 14
+  },
+  "filters": {
+    "volume_threshold": 0.0,
+    "volatility_threshold": 0.8,
+    "trend_confirmation": "1h"
+  },
+  "backtest": {
+    "default_days": 10,
+    "initial_balance": 10000
+  }
+}
