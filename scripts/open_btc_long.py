@@ -12,6 +12,7 @@ sys.path.append(project_root)
 
 from okx_http_client import client
 from trading_strategies.enhanced_sar_strategy_contract import EnhancedSARStrategyContract
+import math
 
 def open_btc_long():
     """开BTC 5倍多单"""
@@ -53,43 +54,49 @@ def open_btc_long():
     current_price = data['close'].iloc[-1]
     print(f"当前BTC价格: ${current_price:.2f}")
     
-    print("\n🚀 直接开BTC 5倍多单 (跳过信号检查)...")
+    print("\n🚀 直接开BTC 5倍多单 (严格使用1000U本金，5x杠杆)...")
     
-    # 获取账户余额
-    balance_info = strategy.get_contract_balance()
-    usdt_balance = balance_info.get('USDT', {}).get('available', 0)
-    print(f"可用USDT余额: ${usdt_balance:.2f}")
+    # 使用固定本金1000U
+    amount = usdt_amount * 5  # 1000U * 5x = 5000U 名义
     
-    # 模拟账户余额为0是正常的，使用用户输入的金额
-    if usdt_balance <= 0:
-        print("⚠️ 模拟账户余额为0，使用用户输入金额")
-        usdt_balance = usdt_amount
-    
-    # 计算合约数量
-    amount = usdt_balance * 0.8 * 5  # 使用80%资金，5倍杠杆
-    # BTC-USDT-SWAP最小数量0.01，步长0.1
-    contract_size = round(amount / current_price, 1)  # 保留1位小数
-    if contract_size < 0.01:
-        contract_size = 0.01  # 最小数量
-    sz = str(contract_size)
-    print(f"计划开仓数量: {sz} 张合约")
-    print(f"使用资金: ${amount:.2f}")
+    # 获取合约规格
+    inst_id = "BTC-USDT-SWAP"
+    insts = client.get_instruments("SWAP")
+    ct_val = 0.01
+    lot_sz = 1.0
+    if insts and insts.get('code') == '0':
+        for it in insts['data']:
+            if it.get('instId') == inst_id:
+                try:
+                    ct_val = float(it.get('ctVal', ct_val))
+                    lot_sz = float(it.get('lotSz', lot_sz))
+                except Exception:
+                    pass
+                break
+    print(f"合约面值 ctVal: {ct_val} BTC, lotSz: {lot_sz}")
+
+    target_btc = amount / current_price
+    raw_sz = target_btc / ct_val
+    sz_num = math.ceil(raw_sz / lot_sz) * lot_sz
+    sz = str(int(round(sz_num))) if abs(sz_num - round(sz_num)) < 1e-9 else f"{sz_num:.8f}".rstrip('0').rstrip('.')
+
+    est_notional = float(sz.split('.')[0] if '.' in sz else sz) * ct_val * current_price
+    print(f"计划开仓张数: {sz} 张 (目标名义≈${amount:.2f}，预估名义≈${est_notional:.2f})")
     print(f"杠杆倍数: 5x")
-    
+
     # 执行开多单
     print("\n🚀 执行开多单...")
-    # 计算限价单价格（稍微高一点确保成交）
     limit_price = str(round(current_price * 1.001, 2))
     print(f"限价单价格: ${limit_price}")
     
     result = strategy.client.place_futures_order(
-        inst_id="BTC-USDT-SWAP",
+        inst_id=inst_id,
         side="buy",
         ord_type="limit",
         sz=sz,
         px=limit_price,
-        td_mode="cross",  # 全仓模式
-        pos_side="long"   # 做多
+        td_mode="cross",
+        pos_side="long"
     )
     
     if result and result.get('code') == '0':

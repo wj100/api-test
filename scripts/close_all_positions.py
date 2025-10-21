@@ -33,54 +33,72 @@ def close_all_positions():
         print(f"❌ 获取市场数据失败: {e}")
         return
     
-    print("\n🚀 尝试平多仓...")
-    # 尝试平多仓
+    print("\n🚀 尝试平多仓/平空仓(根据实际持仓)...")
     try:
-        limit_price = str(round(current_price * 0.999, 2))
-        print(f"限价单价格: ${limit_price}")
-        
-        result = client.place_futures_order(
-            inst_id="BTC-USDT-SWAP",
-            side="sell",
-            ord_type="limit",
-            sz="0.1",  # 尝试平0.1张合约
-            px=limit_price,
-            td_mode="cross",
-            pos_side="long"
-        )
-        
-        if result and result.get('code') == '0':
-            print("✅ 平多仓成功!")
-            print(f"订单ID: {result.get('data', [{}])[0].get('ordId', 'N/A')}")
+        # 查询当前持仓
+        positions = client.get_positions("BTC-USDT-SWAP")
+        long_sz = 0.0
+        short_sz = 0.0
+        if positions and positions.get('code') == '0':
+            for p in positions.get('data', []):
+                if p.get('instId') != 'BTC-USDT-SWAP':
+                    continue
+                try:
+                    pos = float(p.get('pos', 0))
+                except Exception:
+                    pos = 0.0
+                pos_side = p.get('posSide', 'net')
+                if pos_side == 'long' and pos > 0:
+                    long_sz += pos
+                elif pos_side == 'short' and pos > 0:
+                    short_sz += pos
         else:
-            print(f"⚠️ 平多仓失败: {result.get('msg', 'Unknown error')}")
-    except Exception as e:
-        print(f"⚠️ 平多仓异常: {e}")
-    
-    print("\n🚀 尝试平空仓...")
-    # 尝试平空仓
-    try:
-        limit_price = str(round(current_price * 1.001, 2))
-        print(f"限价单价格: ${limit_price}")
-        
-        result = client.place_futures_order(
-            inst_id="BTC-USDT-SWAP",
-            side="buy",
-            ord_type="limit",
-            sz="0.1",  # 尝试平0.1张合约
-            px=limit_price,
-            td_mode="cross",
-            pos_side="short"
-        )
-        
-        if result and result.get('code') == '0':
-            print("✅ 平空仓成功!")
-            print(f"订单ID: {result.get('data', [{}])[0].get('ordId', 'N/A')}")
+            print("✅ 无持仓")
+            return
+
+        # 平多仓
+        if long_sz > 0:
+            limit_price = str(round(current_price * 0.999, 2))
+            print(f"平多仓数量: {long_sz} 张, 限价: ${limit_price}")
+            res = client.place_futures_order(
+                inst_id="BTC-USDT-SWAP",
+                side="sell",
+                ord_type="limit",
+                sz=str(long_sz),
+                px=limit_price,
+                td_mode="cross",
+                pos_side="long"
+            )
+            if res and res.get('code') == '0':
+                print("✅ 平多仓成功!")
+            else:
+                print(f"⚠️ 平多仓失败: {res}")
         else:
-            print(f"⚠️ 平空仓失败: {result.get('msg', 'Unknown error')}")
+            print("✅ 无多仓需要平")
+
+        # 平空仓
+        if short_sz > 0:
+            limit_price = str(round(current_price * 1.001, 2))
+            print(f"平空仓数量: {short_sz} 张, 限价: ${limit_price}")
+            res = client.place_futures_order(
+                inst_id="BTC-USDT-SWAP",
+                side="buy",
+                ord_type="limit",
+                sz=str(short_sz),
+                px=limit_price,
+                td_mode="cross",
+                pos_side="short"
+            )
+            if res and res.get('code') == '0':
+                print("✅ 平空仓成功!")
+            else:
+                print(f"⚠️ 平空仓失败: {res}")
+        else:
+            print("✅ 无空仓需要平")
+
     except Exception as e:
-        print(f"⚠️ 平空仓异常: {e}")
-    
+        print(f"⚠️ 平仓异常: {e}")
+
     print("\n✅ 全平操作完成!")
 
 def main():

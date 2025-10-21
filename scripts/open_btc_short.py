@@ -12,6 +12,7 @@ sys.path.append(project_root)
 
 from okx_http_client import client
 from trading_strategies.enhanced_sar_strategy_contract import EnhancedSARStrategyContract
+import math
 
 def open_btc_short():
     """开BTC 10倍空单"""
@@ -34,9 +35,9 @@ def open_btc_short():
         take_profit_ratio=0.02,
         stop_loss_ratio=0.01,
         atr_period=14,
-        volume_threshold=0.5,  # 降低阈值增加交易机会
+        volume_threshold=0.5,
         initial_usdt=usdt_amount,
-        leverage=10  # 10倍杠杆
+        leverage=10
     )
     
     # 设置杠杆
@@ -53,27 +54,44 @@ def open_btc_short():
     current_price = data['close'].iloc[-1]
     print(f"当前BTC价格: ${current_price:.2f}")
     
-    print("\n🚀 直接开BTC 10倍空单 (跳过信号检查)...")
+    print("\n🚀 直接开BTC 10倍空单 (严格使用1000U本金，10x杠杆)...")
     
-    # 获取账户余额
-    balance_info = strategy.get_contract_balance()
-    usdt_balance = balance_info.get('USDT', {}).get('available', 0)
-    print(f"可用USDT余额: ${usdt_balance:.2f}")
+    # 使用固定本金1000U，不读取账户余额
+    amount = usdt_amount * 10  # 1000U 本金 * 10倍杠杆 = 10000U 名义
     
-    # 模拟账户余额为0是正常的，使用用户输入的金额
-    if usdt_balance <= 0:
-        print("⚠️ 模拟账户余额为0，使用用户输入金额")
-        usdt_balance = usdt_amount
-    
-    # 计算合约数量
-    amount = usdt_balance * 0.8 * 10  # 使用80%资金，10倍杠杆
-    # BTC-USDT-SWAP最小数量0.01，步长0.1
-    contract_size = round(amount / current_price, 1)  # 保留1位小数
-    if contract_size < 0.01:
-        contract_size = 0.01  # 最小数量
-    sz = str(contract_size)
-    print(f"计划开仓数量: {sz} 张合约")
-    print(f"使用资金: ${amount:.2f}")
+    # 获取合约规格用于换算张数
+    inst_id = "BTC-USDT-SWAP"
+    insts = client.get_instruments("SWAP")
+    ct_val = 0.01  # 默认每张面值 0.01 BTC（兜底）
+    lot_sz = 1.0   # 默认下单步长 1 张
+    if insts and insts.get('code') == '0':
+        for it in insts['data']:
+            if it.get('instId') == inst_id:
+                try:
+                    ct_val = float(it.get('ctVal', ct_val))
+                    lot_sz = float(it.get('lotSz', lot_sz))
+                except Exception:
+                    pass
+                break
+    print(f"合约面值 ctVal: {ct_val} { 'BTC' }")
+    print(f"下单步长 lotSz: {lot_sz} 张")
+
+    # 目标BTC数量 = 名义/价格
+    target_btc = amount / current_price
+    # 目标张数 = 目标BTC数量 / ctVal
+    raw_sz = target_btc / ct_val
+    # 按步长取整（向上取整，保证名义不少于目标）
+    sz_num = math.ceil(raw_sz / lot_sz) * lot_sz
+    # 张数必须为整数或步长倍数
+    if abs(sz_num - round(sz_num)) < 1e-9:
+        sz_str = str(int(round(sz_num)))
+    else:
+        sz_str = f"{sz_num:.8f}".rstrip('0').rstrip('.')
+
+    est_notional = sz_num * ct_val * current_price
+    est_margin = est_notional / 10
+
+    print(f"计划开仓张数: {sz_str} 张 (目标名义≈${amount:.2f}，预估名义≈${est_notional:.2f}，预估保证金≈${est_margin:.2f})")
     print(f"杠杆倍数: 10x")
     
     # 执行开空单
@@ -83,27 +101,27 @@ def open_btc_short():
     print(f"限价单价格: ${limit_price}")
     
     result = strategy.client.place_futures_order(
-        inst_id="BTC-USDT-SWAP",
+        inst_id=inst_id,
         side="sell",
         ord_type="limit",
-        sz=sz,
+        sz=sz_str,
         px=limit_price,
-        td_mode="cross",  # 全仓模式
-        pos_side="short"  # 做空
+        td_mode="cross",
+        pos_side="short"
     )
     
     if result and result.get('code') == '0':
         print("✅ 开空单成功!")
         print(f"订单ID: {result.get('data', [{}])[0].get('ordId', 'N/A')}")
         print(f"开仓价格: ${current_price:.2f}")
-        print(f"合约数量: {sz} 张")
+        print(f"合约数量: {sz_str} 张")
         print(f"杠杆倍数: 10x")
         
         # 记录交易
-        strategy.record_trade("sell_open", current_price, float(sz), 0)
+        strategy.record_trade("sell_open", current_price, float(sz_str), 0)
         strategy.position = "short"
         strategy.entry_price = current_price
-        strategy.position_size = -float(sz)
+        strategy.position_size = -float(sz_str)
         
         print(f"\n📊 持仓信息:")
         print(f"持仓方向: 空")
