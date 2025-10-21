@@ -1,0 +1,5 @@
+# 最小依赖版本 - 适用于旧系统
+python-okx
+pandas
+numpy
+requests
